@@ -22,6 +22,7 @@ function print_help {
     echo "--kubelet-extra-args Extra arguments to add to the kubelet. Useful for adding labels or taints."
     echo "--enable-docker-bridge Restores the docker default bridge network. (default: false)"
     echo "--aws-api-retry-attempts Number of retry attempts for AWS API call (DescribeCluster) (default: 3)"
+    echo "--aws-eks-cluster-region The region of the EKS Cluster that this worker node will connect to (default: current region)"
 }
 
 POSITIONAL=()
@@ -63,6 +64,11 @@ while [[ $# -gt 0 ]]; do
             shift
             shift
             ;;
+        --aws-eks-cluster-region)
+            EKS_CLUSTER_REGION=$2
+            shift
+            shift
+            ;;
         *)    # unknown option
             POSITIONAL+=("$1") # save it in an array for later
             shift # past argument
@@ -89,6 +95,9 @@ fi
 
 ZONE=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
 AWS_DEFAULT_REGION=$(echo $ZONE | awk '{print substr($0, 1, length($0)-1)}')
+if [ -z "$EKS_CLUSTER_REGION" ]; then
+    EKS_CLUSTER_REGION="$AWS_DEFAULT_REGION"
+fi
 
 ### kubelet kubeconfig
 
@@ -104,7 +113,7 @@ if [[ -z "${B64_CLUSTER_CA}" ]] && [[ -z "${APISERVER_ENDPOINT}" ]]; then
             echo "Attempt $attempt of $API_RETRY_ATTEMPTS"
         fi
         aws eks describe-cluster \
-            --region=${AWS_DEFAULT_REGION} \
+            --region=${EKS_CLUSTER_REGION} \
             --name=${CLUSTER_NAME} \
             --output=text \
             --query 'cluster.{certificateAuthorityData: certificateAuthority.data, endpoint: endpoint}' > $DESCRIBE_CLUSTER_RESULT || rc=$?
